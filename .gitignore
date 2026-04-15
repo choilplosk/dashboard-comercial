@@ -1,0 +1,6 @@
+dados/usuarios.json 
+dados/nps.json 
+dados/iaf_config.json 
+dados/historico/ 
+__pycache__/ 
+*.pyc 
