@@ -49,11 +49,32 @@ def cor_indicador(pct: Optional[float]) -> str:
     """
     if pct is None or pd.isna(pct):
         return 'cinza'
-    # Normaliza para percentual se vier em decimal
     v = pct * 100 if pct <= 2 else pct
     if v >= 100:
         return 'verde'
     elif v >= 95:
+        return 'amarelo'
+    else:
+        return 'vermelho'
+
+
+def cor_indicador_invertido(pct: Optional[float]) -> str:
+    """
+    Lógica de cor INVERTIDA — usado para indicadores onde menor é melhor.
+    Ex: Resgate Fidelidade — abaixo da meta = verde, acima = vermelho.
+    pct = realizado / meta (em decimal).
+
+    Verde:    <= 100% (está abaixo ou igual à meta — bom)
+    Amarelo:  entre 100% e 110%
+    Vermelho: > 110% (está acima da meta — ruim)
+    Cinza:    sem dado
+    """
+    if pct is None or pd.isna(pct):
+        return 'cinza'
+    v = pct * 100 if pct <= 2 else pct
+    if v <= 100:
+        return 'verde'
+    elif v <= 110:
         return 'amarelo'
     else:
         return 'vermelho'
@@ -143,16 +164,22 @@ def montar_base_consultores(
     """
     # Chave de join: consultor (normalizado) + PDV
     df_cons = df_cons.copy()
-    df_metas = df_metas.copy()
+    df_metas = df_metas.copy() if df_metas is not None else pd.DataFrame()
 
     df_cons['_key'] = df_cons['consultor'].str.strip().str.upper() + '_' + df_cons['pdv'].astype(str)
-    df_metas['_key'] = df_metas['consultor'].str.strip().str.upper() + '_' + df_metas['pdv'].astype(str)
 
-    base = df_cons.merge(
-        df_metas.drop(columns=['consultor', 'pdv']),
-        on='_key',
-        how='left'
-    )
+    # Metas podem estar vazias ou sem coluna consultor (ex: primeira vez sem metas)
+    if not df_metas.empty and 'consultor' in df_metas.columns and 'pdv' in df_metas.columns:
+        df_metas['_key'] = df_metas['consultor'].str.strip().str.upper() + '_' + df_metas['pdv'].astype(str)
+        colunas_drop = [c for c in ['consultor', 'pdv'] if c in df_metas.columns]
+        base = df_cons.merge(
+            df_metas.drop(columns=colunas_drop),
+            on='_key',
+            how='left'
+        )
+    else:
+        base = df_cons.copy()
+        base['_key'] = df_cons['_key']
 
     # Serviços agregados por consultor + PDV
     if df_serv is not None and not df_serv.empty:
@@ -268,7 +295,7 @@ def resumo_consolidado(base: pd.DataFrame, metas: pd.DataFrame) -> dict:
         'Pen. Mobshop':         (media('pen_mobshop'),       meta_media('meta_pen_mobshop')),
         'Pen. Boletos 1':       (media('pen_boletos1'),      meta_media('meta_pen_boletos1')),
         'Pen. Fidelidade':      (media('pen_fidelidade'),    meta_media('meta_pen_fidelidade')),
-        'Resgate Fidelidade':   (soma('resgate_fidelidade'), meta_soma('meta_resgate_fidelidade')),
+        'Resgate Fidelidade':   (media('resgate_fidelidade'), meta_media('meta_resgate_fidelidade')),
         'Conv. Fluxo':          (media('conv_fluxo'),        meta_media('meta_conv_fluxo')),
         'Pen. Facial':          (media('pen_facial'),        meta_media('meta_pen_facial')),
         '% ID Cliente':         (media('pct_id_cliente_iaf'),meta_media('meta_pct_id_cliente')),

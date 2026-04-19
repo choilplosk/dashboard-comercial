@@ -7,8 +7,8 @@ import streamlit as st
 import plotly.graph_objects as go
 import pandas as pd
 from modulos.calculos import (
-    resumo_consolidado, cor_indicador, CORES, CORES_IAF,
-    fmt_brl, fmt_pct, fmt_num, atingimento_pct
+    resumo_consolidado, cor_indicador, cor_indicador_invertido, CORES, CORES_IAF,
+    fmt_brl, fmt_pct, fmt_num, atingimento_pct, atingimento
 )
 from modulos.iaf import calcular_iaf_base
 
@@ -93,7 +93,16 @@ def render(dados: dict, nps_por_pdv: dict):
         d = consolidado[nome]
         with cols2[i % 3]:
             if nome == 'Resgate Fidelidade':
-                _card_indicador(nome, d['realizado'], d['meta'], d['atingimento'], d['cor'], lambda v: fmt_num(v, 1))
+                # Realizado já vem × 100 (ex: 56.2%), meta em decimal — lógica normal
+                meta_rf = d['meta'] * 100 if d['meta'] is not None else None
+                at_rf = atingimento(d['realizado'], meta_rf)
+                cor_rf = cor_indicador(at_rf) if at_rf is not None else 'cinza'
+                _card_indicador(nome, d['realizado'], meta_rf, at_rf, cor_rf,
+                                lambda v: f"{v:.1f}%")
+            elif nome == 'Pen. Boletos 1':
+                at_b1 = atingimento(d['realizado'], d['meta'])
+                cor_b1 = cor_indicador_invertido(at_b1) if at_b1 is not None else 'cinza'
+                _card_indicador(nome, d['realizado'], d['meta'], at_b1, cor_b1, fmt_pct)
             else:
                 _card_indicador(nome, d['realizado'], d['meta'], d['atingimento'], d['cor'], fmt_pct)
 

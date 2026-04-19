@@ -31,10 +31,6 @@ def _cols(df: pd.DataFrame) -> set:
 # Validadas contra os arquivos reais — não alterar sem testar.
 
 ASSINATURAS = {
-    'metas': {
-        'obrigatorias': {'consultor', 'pdv', 'receita', 'boleto medio', 'servicos', 'nps'},
-        'descricao': 'Metas por Consultor',
-    },
     'pdv': {
         'obrigatorias': {'pdv', 'receita', 'vs. meta pef'},
         'descricao': 'Resultados por PDV',
@@ -149,11 +145,15 @@ def processar_pdv(df: pd.DataFrame) -> pd.DataFrame:
     pos = {
         0:  'pdv',
         1:  'receita',
+        3:  'receita_vs_ly',
         4:  'qtd_boletos',
         7:  'boleto_medio',
+        9:  'boleto_medio_vs_ly',
         10: 'qtd_itens',
         13: 'itens_por_boleto',
+        15: 'itens_por_boleto_vs_ly',
         16: 'preco_medio',
+        18: 'preco_medio_vs_ly',
         19: 'pen_bt',
         22: 'pen_bp',
         28: 'pen_mobshop',
@@ -275,7 +275,7 @@ def processar_id_cliente(df: pd.DataFrame) -> pd.DataFrame:
 PROCESSADORES = {
     'consultor':    processar_consultor,
     'pdv':          processar_pdv,
-    'metas':        processar_metas,
+
     'servicos':     processar_servicos,
     'treinamentos': processar_treinamentos,
     'id_cliente':   processar_id_cliente,
