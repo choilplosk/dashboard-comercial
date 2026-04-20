@@ -1,4 +1,4 @@
-"""
+""
 Aba Por Consultor.
 Visão geral (tabela) e visão individual (scorecard para feedback).
 """
@@ -219,9 +219,9 @@ def render(dados: dict, nps_por_pdv: dict):
             ("🔵 Pen. BT",      'pen_bt',            'meta_pen_bt',             fmt_pct,                None,                 False),
             ("🟣 Pen. BP",      'pen_bp',            'meta_pen_bp',             fmt_pct,                'pen_bp',             False),
             ("📱 Mobshop",      'pen_mobshop',       'meta_pen_mobshop',        fmt_pct,                None,                 False),
-            ("1️⃣ Boletos 1",   'pen_boletos1',      'meta_pen_boletos1',       fmt_pct,                None,                 False),
+            ("1️⃣ Boletos 1",   'pen_boletos1',      'meta_pen_boletos1',       fmt_pct,                None,                 True),
             ("💛 Fidelidade",   'pen_fidelidade',    'meta_pen_fidelidade',     fmt_pct,                None,                 False),
-            ("🔄 Resg. Fid.",   'resgate_fidelidade','meta_resgate_fidelidade', lambda v: f"{v:.1f}%",  'resgate_fidelidade', True),
+            ("🔄 Resg. Fid.",   'resgate_fidelidade','meta_resgate_fidelidade', lambda v: f"{v:.1f}%",  'resgate_fidelidade', False),
             ("🌊 Conv. Fluxo",  'conv_fluxo',        'meta_conv_fluxo',         fmt_pct,                None,                 False),
             ("💄 Facial",       'pen_facial',        'meta_pen_facial',         fmt_pct,                'pen_facial',         False),
             ("🪪 ID Cliente",   'pct_id_cliente_iaf','meta_pct_id_cliente',     fmt_pct,                'id_cliente',         False),
