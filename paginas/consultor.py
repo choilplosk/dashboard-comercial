@@ -230,8 +230,9 @@ def render(dados: dict, nps_por_pdv: dict):
         for i, (label, col_r, col_m, fmt_fn, iaf_id, inv) in enumerate(pens):
             real_v = row.get(col_r)
             meta_v = row.get(col_m)
-            # Resgate: real já × 100, meta em decimal → converte meta para %
-            if inv and meta_v is not None:
+            # Resgate Fidelidade: real já × 100, meta em decimal → converte para %
+            # Boletos 1: sem conversão — ambos já estão em decimal
+            if col_r == 'resgate_fidelidade' and meta_v is not None:
                 try:
                     meta_v = float(meta_v) * 100
                 except (TypeError, ValueError):
