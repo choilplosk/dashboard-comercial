@@ -287,7 +287,7 @@ def render(dados: dict):
     with c1: _card("🔵 Pen. BT",      get_pdv('pen_bt'),          meta_media('meta_pen_bt'),           pesos.get('pen_bt'), 'pct')
     with c2: _card("🟣 Pen. BP",      get_pdv('pen_bp'),          meta_media('meta_pen_bp'),           pesos.get('pen_bp'), 'pct')
     with c3: _card("📱 Mobshop",      get_pdv('pen_mobshop'),     meta_media('meta_pen_mobshop'),      None, 'pct')
-    with c4: _card("1️⃣ Boletos 1",   get_pdv('pen_boletos1'),    meta_media('meta_pen_boletos1'),     None, 'pct')
+    with c4: _card("1️⃣ Boletos 1",   get_pdv('pen_boletos1'),    meta_media('meta_pen_boletos1'),     None, 'pct', 3, invertido=True)
 
     c5, c6, c7, c8 = st.columns(4)
     with c5: _card("💛 Fidelidade",   get_pdv('pen_fidelidade'),  meta_media('meta_pen_fidelidade'),   None, 'pct')
@@ -298,7 +298,7 @@ def render(dados: dict):
         # Meta vem em decimal (0.52), converte para percentual para comparar
         rf_meta_pct = rf_meta * 100 if rf_meta is not None else None
         _card("🔄 Resg. Fid.",  rf_real, rf_meta_pct,
-              pesos.get('resgate_fidelidade'), 'num', 1, invertido=True)
+              pesos.get('resgate_fidelidade'), 'num', 1, invertido=False)
     with c7: _card("🌊 Conv. Fluxo",  get_pdv('conv_fluxo'),      meta_media('meta_conv_fluxo'),       None, 'pct')
     with c8: _card("💄 Facial",       get_pdv('pen_facial'),      meta_media('meta_pen_facial'),       pesos.get('pen_facial'), 'pct')
 
