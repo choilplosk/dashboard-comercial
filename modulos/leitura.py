@@ -256,16 +256,16 @@ def processar_id_cliente(df: pd.DataFrame) -> pd.DataFrame:
     df.columns = [str(c).strip() for c in df.columns]
     renomear = {
         'PDV': 'pdv', 'CONSULTOR': 'consultor',
-        '% Atendimentos com CPF (IAF 2026)': 'pct_atend_cpf',
+        # Coluna E — % Atendimentos com CPF (IAF 2026) — é o indicador oficial do ID Cliente
+        '% Atendimentos com CPF (IAF 2026)': 'pct_id_cliente_iaf',
         '% ATENDIMENTOS USO INDEVIDO': 'pct_uso_indevido',
-        '% BOLETOS ID CLIENTE VÁLIDOS (IAF)': 'pct_id_cliente_iaf',
         '% BOLETOS ID CLIENTE USO INDEVIDO': 'pct_id_indevido',
         '% BOLETOS ID CLIENTE TMA CPF ABAIXO DE 2MIN': 'pct_id_tma',
     }
     df = df.rename(columns={k: v for k, v in renomear.items() if k in df.columns})
     df['pdv'] = pd.to_numeric(df['pdv'], errors='coerce').astype('Int64')
     df['consultor'] = df['consultor'].astype(str).str.strip().str.title()
-    for c in ['pct_atend_cpf', 'pct_uso_indevido', 'pct_id_cliente_iaf',
+    for c in ['pct_id_cliente_iaf', 'pct_uso_indevido',
               'pct_id_indevido', 'pct_id_tma']:
         if c in df.columns:
             df[c] = pd.to_numeric(df[c], errors='coerce')
