@@ -276,12 +276,23 @@ def resumo_consolidado(base: pd.DataFrame, metas: pd.DataFrame) -> dict:
     def media(col):
         return df[col].mean() if col in df.columns else None
 
+    def media_sem_zero(col):
+        """Média excluindo zeros — usado para indicadores onde zero = ausência de dado."""
+        if col not in df.columns: return None
+        vals = pd.to_numeric(df[col], errors='coerce')
+        vals = vals[vals > 0]
+        return vals.mean() if not vals.empty else None
+
     def meta_soma(col):
-        m = metas[metas.get('is_gerente', False) != True]
+        if metas.empty: return None
+        mask = metas['is_gerente'].fillna(False).astype(bool) if 'is_gerente' in metas.columns else pd.Series(False, index=metas.index)
+        m = metas[~mask]
         return pd.to_numeric(m[col], errors='coerce').sum() if col in m.columns else None
 
     def meta_media(col):
-        m = metas[metas.get('is_gerente', False) != True]
+        if metas.empty: return None
+        mask = metas['is_gerente'].fillna(False).astype(bool) if 'is_gerente' in metas.columns else pd.Series(False, index=metas.index)
+        m = metas[~mask]
         return pd.to_numeric(m[col], errors='coerce').mean() if col in m.columns else None
 
     indicadores = {
@@ -298,7 +309,7 @@ def resumo_consolidado(base: pd.DataFrame, metas: pd.DataFrame) -> dict:
         'Resgate Fidelidade':   (media('resgate_fidelidade'), meta_media('meta_resgate_fidelidade')),
         'Conv. Fluxo':          (media('conv_fluxo'),        meta_media('meta_conv_fluxo')),
         'Pen. Facial':          (media('pen_facial'),        meta_media('meta_pen_facial')),
-        '% ID Cliente':         (media('pct_id_cliente_iaf'),meta_media('meta_pct_id_cliente')),
+        '% ID Cliente':         (media_sem_zero('pct_id_cliente_iaf'),meta_media('meta_pct_id_cliente')),
         'Serviços':             (soma('servicos_real'),      meta_soma('meta_servicos')),
     }
 
