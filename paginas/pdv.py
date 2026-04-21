@@ -242,6 +242,17 @@ def render(dados: dict):
             return None if (isinstance(v, float) and pd.isna(v)) or v == '-' else v
         return None
 
+    def get_base_media(col):
+        """Busca média de uma coluna da base calculada para o PDV selecionado."""
+        df_pdv_calc = base[base['pdv'] == pdv_int].copy()
+        is_ger = df_pdv_calc['is_gerente'].fillna(False).astype(bool) if 'is_gerente' in df_pdv_calc.columns else pd.Series(False, index=df_pdv_calc.index)
+        df_pdv_calc = df_pdv_calc[~is_ger]
+        if col not in df_pdv_calc.columns:
+            return None
+        vals = pd.to_numeric(df_pdv_calc[col], errors='coerce')
+        vals = vals[vals > 0]  # exclui zeros
+        return vals.mean() if not vals.empty else None
+
     nps_dict = carregar_nps()
     nps_val  = nps_dict.get(str(pdv_int))
 
@@ -275,7 +286,7 @@ def render(dados: dict):
     with c5: _card("🧾 Qtd. Boletos",  get_pdv('qtd_boletos'),    None,                             None, 'num', 0)
     with c6: _card("✂️ Serviços",      get_pdv('qtd_servicos'),   meta_soma('meta_servicos'),       pesos.get('servicos'), 'num', 0)
     with c7: _card("🏆 NPS",           nps_val,                   meta_media('meta_nps'),           pesos.get('nps'), 'num', 1)
-    with c8: _card("🪪 ID Cliente",    get_pdv('pct_id_cliente'), meta_media('meta_pct_id_cliente'), pesos.get('id_cliente'), 'pct')
+    with c8: _card("🪪 ID Cliente",    get_base_media('pct_id_cliente_iaf'), meta_media('meta_pct_id_cliente'), pesos.get('id_cliente'), 'pct')
 
     st.markdown('</div>', unsafe_allow_html=True)
 
@@ -309,10 +320,9 @@ def render(dados: dict):
     st.markdown(f"#### Consultores — PDV {pdv_sel}")
 
     df_pdv_base = base[base['pdv'] == pdv_int].copy()
-    is_ger = df_pdv_base.get('is_gerente',
-             pd.Series(False, index=df_pdv_base.index)).fillna(False).astype(bool)
-    df_cons_pdv = df_pdv_base[~is_ger]
-    df_ger_pdv  = df_pdv_base[is_ger]
+    is_ger = df_pdv_base['is_gerente'].fillna(False).astype(bool) if 'is_gerente' in df_pdv_base.columns else pd.Series(False, index=df_pdv_base.index)
+    df_cons_pdv = df_pdv_base[~is_ger].copy()
+    df_ger_pdv  = df_pdv_base[is_ger].copy()
 
     if not df_cons_pdv.empty:
         linhas = [_linha_tabela(r) for _, r in df_cons_pdv.iterrows()]
@@ -343,3 +353,4 @@ def render(dados: dict):
             salvar_nps_supabase(pdv_int, novo_nps)
             st.success(f"NPS do PDV {pdv_sel} salvo: {novo_nps:.1f}")
             st.rerun()
+
