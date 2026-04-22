@@ -27,8 +27,6 @@ def _cols(df: pd.DataFrame) -> set:
 
 
 # ── Assinaturas ───────────────────────────────────────────────────────────────
-# Ordem importa: tipos mais específicos primeiro.
-# Validadas contra os arquivos reais — não alterar sem testar.
 
 ASSINATURAS = {
     'pdv': {
@@ -93,7 +91,6 @@ def processar_consultor(df: pd.DataFrame) -> pd.DataFrame:
 
     cols = list(df.columns)
 
-    # Mapeamento posicional — cada indicador ocupa 2 colunas (valor + vs período anterior)
     mapa = {}
     for i, c in enumerate(cols):
         cn = _n(c)
@@ -236,8 +233,6 @@ def processar_treinamentos(df: pd.DataFrame) -> pd.DataFrame:
     df = df.rename(columns={k: v for k, v in renomear.items() if k in df.columns})
     df['pdv'] = pd.to_numeric(df['pdv'], errors='coerce').astype('Int64')
     df['consultor'] = df['consultor'].astype(str).str.strip().str.title()
-    # ADESÃO IAF é o percentual de conclusão dos treinamentos (1.0 = 100% concluído)
-    # CONCLUSÃO GERAL pode estar vazia — nesse caso usa ADESÃO IAF como indicador
     if 'adesao_iaf' in df.columns:
         df['treinamento_pct'] = pd.to_numeric(df['adesao_iaf'], errors='coerce').fillna(0)
         df['treinamento_concluido'] = df['treinamento_pct'] >= 1.0
@@ -255,9 +250,10 @@ def processar_treinamentos(df: pd.DataFrame) -> pd.DataFrame:
 def processar_id_cliente(df: pd.DataFrame) -> pd.DataFrame:
     df.columns = [str(c).strip() for c in df.columns]
     renomear = {
-        'PDV': 'pdv', 'CONSULTOR': 'consultor',
-        # Coluna E — % Atendimentos com CPF (IAF 2026) — é o indicador oficial do ID Cliente
-        '% Atendimentos com CPF (IAF 2026)': 'pct_id_cliente_iaf',
+        'PDV': 'pdv',
+        'CONSULTOR': 'consultor',
+        # CORRIGIDO: usa % BOLETOS ID CLIENTE VÁLIDOS (IAF) — indicador oficial correto
+        '% BOLETOS ID CLIENTE VÁLIDOS (IAF)': 'pct_id_cliente_iaf',
         '% ATENDIMENTOS USO INDEVIDO': 'pct_uso_indevido',
         '% BOLETOS ID CLIENTE USO INDEVIDO': 'pct_id_indevido',
         '% BOLETOS ID CLIENTE TMA CPF ABAIXO DE 2MIN': 'pct_id_tma',
@@ -275,7 +271,6 @@ def processar_id_cliente(df: pd.DataFrame) -> pd.DataFrame:
 PROCESSADORES = {
     'consultor':    processar_consultor,
     'pdv':          processar_pdv,
-
     'servicos':     processar_servicos,
     'treinamentos': processar_treinamentos,
     'id_cliente':   processar_id_cliente,
