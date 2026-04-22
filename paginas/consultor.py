@@ -31,6 +31,23 @@ def _bg_fg(cor):
     }.get(cor, ('#f1f5f9', '#475569'))
 
 
+def _atingimento_invertido(realizado, meta):
+    """
+    Atingimento para indicadores onde MENOR é MELHOR (ex: Boleto 1).
+    Fórmula: meta / realizado
+    Se realizado < meta → acima de 100% (ótimo)
+    Se realizado > meta → abaixo de 100% (ruim)
+    """
+    try:
+        r = float(realizado)
+        m = float(meta)
+        if r == 0 or pd.isna(r):
+            return None
+        return m / r
+    except (TypeError, ValueError):
+        return None
+
+
 def _card(label, valor, meta=None, at=None, fmt_fn=None,
           iaf_peso=None, invertido=False):
     """Card de indicador com semáforo, badge IAF e suporte a lógica invertida."""
@@ -219,6 +236,8 @@ def render(dados: dict, nps_por_pdv: dict):
             ("🔵 Pen. BT",      'pen_bt',            'meta_pen_bt',             fmt_pct,                None,                 False),
             ("🟣 Pen. BP",      'pen_bp',            'meta_pen_bp',             fmt_pct,                'pen_bp',             False),
             ("📱 Mobshop",      'pen_mobshop',       'meta_pen_mobshop',        fmt_pct,                None,                 False),
+            # CORRIGIDO: Boleto 1 é invertido — menor é melhor
+            # Usa _atingimento_invertido() em vez de atingimento()
             ("1️⃣ Boletos 1",   'pen_boletos1',      'meta_pen_boletos1',       fmt_pct,                None,                 True),
             ("💛 Fidelidade",   'pen_fidelidade',    'meta_pen_fidelidade',     fmt_pct,                None,                 False),
             ("🔄 Resg. Fid.",   'resgate_fidelidade','meta_resgate_fidelidade', lambda v: f"{v:.1f}%",  'resgate_fidelidade', False),
@@ -230,14 +249,13 @@ def render(dados: dict, nps_por_pdv: dict):
         for i, (label, col_r, col_m, fmt_fn, iaf_id, inv) in enumerate(pens):
             real_v = row.get(col_r)
             meta_v = row.get(col_m)
-            # Resgate Fidelidade: real já × 100, meta em decimal → converte para %
-            # Boletos 1: sem conversão — ambos já estão em decimal
-            if col_r == 'resgate_fidelidade' and meta_v is not None:
-                try:
-                    meta_v = float(meta_v) * 100
-                except (TypeError, ValueError):
-                    meta_v = None
-            at = atingimento(real_v, meta_v)
+
+            # CORRIGIDO: Boleto 1 usa atingimento invertido (meta/realizado)
+            if inv:
+                at = _atingimento_invertido(real_v, meta_v)
+            else:
+                at = atingimento(real_v, meta_v)
+
             peso = pesos_iaf.get(iaf_id) if iaf_id else None
             with cols_pen[i % 3]:
                 _card(label, real_v, meta_v, at,
