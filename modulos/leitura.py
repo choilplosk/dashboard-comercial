@@ -249,22 +249,23 @@ def processar_treinamentos(df: pd.DataFrame) -> pd.DataFrame:
 
 def processar_id_cliente(df: pd.DataFrame) -> pd.DataFrame:
     df.columns = [str(c).strip() for c in df.columns]
+    cols = list(df.columns)
+
+    # Mapeamento por nome para PDV e CONSULTOR
     renomear = {
         'PDV': 'pdv',
         'CONSULTOR': 'consultor',
-        # CORRIGIDO: usa % BOLETOS ID CLIENTE VÁLIDOS (IAF) — indicador oficial correto
-        '% BOLETOS ID CLIENTE VÁLIDOS (IAF)': 'pct_id_cliente_iaf',
-        '% ATENDIMENTOS USO INDEVIDO': 'pct_uso_indevido',
-        '% BOLETOS ID CLIENTE USO INDEVIDO': 'pct_id_indevido',
-        '% BOLETOS ID CLIENTE TMA CPF ABAIXO DE 2MIN': 'pct_id_tma',
     }
     df = df.rename(columns={k: v for k, v in renomear.items() if k in df.columns})
+
+    # Coluna L (índice 11) = % BOLETOS ID CLIENTE VÁLIDOS (IAF) — indicador correto
+    if len(cols) > 11:
+        df = df.rename(columns={cols[11]: 'pct_id_cliente_iaf'})
+
     df['pdv'] = pd.to_numeric(df['pdv'], errors='coerce').astype('Int64')
     df['consultor'] = df['consultor'].astype(str).str.strip().str.title()
-    for c in ['pct_id_cliente_iaf', 'pct_uso_indevido',
-              'pct_id_indevido', 'pct_id_tma']:
-        if c in df.columns:
-            df[c] = pd.to_numeric(df[c], errors='coerce')
+    if 'pct_id_cliente_iaf' in df.columns:
+        df['pct_id_cliente_iaf'] = pd.to_numeric(df['pct_id_cliente_iaf'], errors='coerce')
     return df
 
 
