@@ -36,34 +36,40 @@ def _bg_fg(cor):
 
 def _atingimento_invertido(realizado, meta):
     """
-    Atingimento para indicadores onde MENOR é MELHOR (ex: Boleto 1).
-    Retorna o atingimento NORMAL (realizado/meta) para exibição do %.
-    A cor é tratada separadamente por _cor_boleto1().
+    Atingimento para Boleto 1 — menor é melhor.
+    Fórmula: meta / realizado
+    Se realizado < meta → at > 1.0 → verde (bom, está abaixo do limite)
+    Se realizado > meta → at < 1.0 → vermelho (ruim, ultrapassou o limite)
     """
     try:
         r = float(realizado)
         m = float(meta)
-        if m == 0 or pd.isna(m):
+        if r == 0 or pd.isna(r):
             return None
-        return r / m
+        return m / r
     except (TypeError, ValueError):
         return None
 
 
 def _cor_boleto1(at):
     """
-    Cor para Boleto 1 — lógica invertida:
-    at < 1.0 (realizado < meta) → verde (bom)
-    at >= 1.0 (realizado >= meta) → vermelho (ruim)
+    Cor para Boleto 1 — at = meta/realizado:
+    at >= 1.0 → realizado <= meta → verde (bom, está dentro do limite)
+    at >= 0.95 → amarelo
+    at < 0.95  → vermelho (ruim, ultrapassou o limite)
     """
     if at is None or pd.isna(at):
         return 'cinza'
-    if at <= 1.0:
+    v = at * 100 if at <= 2 else at
+    if v >= 100:
         return 'verde'
-    elif at <= 1.05:
+    elif v >= 95:
         return 'amarelo'
     else:
         return 'vermelho'
+
+
+
 
 
 def _card(label, valor, meta=None, at=None, fmt_fn=None,
@@ -276,8 +282,11 @@ def render(dados: dict, nps_por_pdv: dict):
                 except (TypeError, ValueError):
                     meta_v = None
 
-            # Boleto 1 usa atingimento normal mas com cor invertida
-            at = atingimento(real_v, meta_v)
+            # Boleto 1 usa meta/realizado (invertido)
+            if inv:
+                at = _atingimento_invertido(real_v, meta_v)
+            else:
+                at = atingimento(real_v, meta_v)
 
             peso = pesos_iaf.get(iaf_id) if iaf_id else None
             with cols_pen[i % 3]:
