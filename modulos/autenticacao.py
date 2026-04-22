@@ -1,60 +1,89 @@
 """
 Módulo de autenticação.
-Gerencia login, perfis (admin, lideranca, consultor) e sessão.
-Senhas armazenadas como hash SHA-256 — nunca em texto puro.
+Usuários armazenados no Supabase — funciona em qualquer ambiente.
 """
 
-import json
-import hashlib
-import os
 import streamlit as st
+import hashlib
 from datetime import datetime
 
-CAMINHO_USUARIOS = os.path.join(os.path.dirname(__file__), '..', 'dados', 'usuarios.json')
-
-
-# ── Utilitários ──────────────────────────────────────────────────────────────
 
 def _hash(senha: str) -> str:
     return hashlib.sha256(senha.encode()).hexdigest()
 
 
+def _get_client():
+    try:
+        from supabase import create_client
+        url = st.secrets["supabase"]["url"]
+        key = st.secrets["supabase"]["key"]
+        return create_client(url, key)
+    except Exception:
+        return None
+
+
 def _carregar_usuarios() -> dict:
-    if not os.path.exists(CAMINHO_USUARIOS):
+    """Carrega usuários do Supabase."""
+    client = _get_client()
+    if client is None:
         return {}
-    with open(CAMINHO_USUARIOS, 'r', encoding='utf-8') as f:
-        return json.load(f)
+    try:
+        res = client.table('usuarios').select('*').execute()
+        usuarios = {}
+        for u in res.data:
+            usuarios[u['login']] = {
+                'nome':       u['nome'],
+                'senha_hash': u['senha_hash'],
+                'perfil':     u['perfil'],
+                'pdvs':       [p.strip() for p in u.get('pdvs', '').split(',') if p.strip()],
+                'ativo':      u.get('ativo', True),
+                'id':         u['id'],
+            }
+        return usuarios
+    except Exception as e:
+        st.error(f"Erro ao carregar usuários: {e}")
+        return {}
 
 
-def _salvar_usuarios(usuarios: dict):
-    os.makedirs(os.path.dirname(CAMINHO_USUARIOS), exist_ok=True)
-    with open(CAMINHO_USUARIOS, 'w', encoding='utf-8') as f:
-        json.dump(usuarios, f, ensure_ascii=False, indent=2)
-
-
-def _criar_usuarios_padrao():
-    """Cria usuários iniciais se o arquivo não existir."""
-    usuarios = {
-        "admin": {
-            "nome": "Administrador",
-            "senha_hash": _hash("admin2026"),
-            "perfil": "admin",
-            "pdvs": [],          # lista vazia = acesso a todos
-            "ativo": True,
-            "criado_em": datetime.now().isoformat()
+def _salvar_usuario(login: str, dados: dict) -> bool:
+    """Insere ou atualiza um usuário no Supabase."""
+    client = _get_client()
+    if client is None:
+        return False
+    try:
+        pdvs_str = ','.join(str(p) for p in dados.get('pdvs', []))
+        payload = {
+            'login':      login,
+            'nome':       dados['nome'],
+            'senha_hash': dados['senha_hash'],
+            'perfil':     dados['perfil'],
+            'pdvs':       pdvs_str,
+            'ativo':      dados.get('ativo', True),
         }
-    }
-    _salvar_usuarios(usuarios)
-    return usuarios
+        # Upsert — insere ou atualiza
+        client.table('usuarios').upsert(payload, on_conflict='login').execute()
+        return True
+    except Exception as e:
+        st.error(f"Erro ao salvar usuário: {e}")
+        return False
 
 
-# ── Login ────────────────────────────────────────────────────────────────────
+def _atualizar_campo(login: str, campo: str, valor) -> bool:
+    """Atualiza um campo específico de um usuário."""
+    client = _get_client()
+    if client is None:
+        return False
+    try:
+        client.table('usuarios').update({campo: valor}).eq('login', login).execute()
+        return True
+    except Exception as e:
+        st.error(f"Erro ao atualizar usuário: {e}")
+        return False
 
-def tela_login():
-    """
-    Exibe a tela de login e gerencia a sessão.
-    Retorna True se autenticado, False caso contrário.
-    """
+
+# ── Tela de login ─────────────────────────────────────────────────────────────
+
+def tela_login() -> bool:
     if st.session_state.get('autenticado'):
         return True
 
@@ -66,25 +95,35 @@ def tela_login():
             unsafe_allow_html=True
         )
 
-        with st.container():
-            usuario = st.text_input("Usuário", placeholder="seu.usuario")
-            senha   = st.text_input("Senha", type="password", placeholder="••••••••")
+        usuario = st.text_input("Usuário", placeholder="seu.usuario")
+        senha   = st.text_input("Senha", type="password", placeholder="••••••••")
 
-            if st.button("Entrar", use_container_width=True):
-                usuarios = _carregar_usuarios()
-                if not usuarios:
-                    usuarios = _criar_usuarios_padrao()
+        if st.button("Entrar", use_container_width=True):
+            usuarios = _carregar_usuarios()
 
-                u = usuarios.get(usuario)
-                if u and u.get('ativo') and u['senha_hash'] == _hash(senha):
+            # Fallback admin se Supabase vazio
+            if not usuarios:
+                if usuario == 'admin' and senha == 'admin2026':
                     st.session_state['autenticado']  = True
-                    st.session_state['usuario']      = usuario
-                    st.session_state['nome_usuario'] = u['nome']
-                    st.session_state['perfil']       = u['perfil']
-                    st.session_state['pdvs_acesso']  = u.get('pdvs', [])
+                    st.session_state['usuario']      = 'admin'
+                    st.session_state['nome_usuario'] = 'Administrador'
+                    st.session_state['perfil']       = 'admin'
+                    st.session_state['pdvs_acesso']  = []
                     st.rerun()
                 else:
                     st.error("Usuário ou senha incorretos.")
+                return False
+
+            u = usuarios.get(usuario)
+            if u and u.get('ativo') and u['senha_hash'] == _hash(senha):
+                st.session_state['autenticado']  = True
+                st.session_state['usuario']      = usuario
+                st.session_state['nome_usuario'] = u['nome']
+                st.session_state['perfil']       = u['perfil']
+                st.session_state['pdvs_acesso']  = u.get('pdvs', [])
+                st.rerun()
+            else:
+                st.error("Usuário ou senha incorretos.")
 
         st.markdown(
             "<p style='text-align:center; font-size:12px; color:gray; margin-top:2rem;'>"
@@ -100,8 +139,6 @@ def logout():
     st.rerun()
 
 
-# ── Controle de acesso ────────────────────────────────────────────────────────
-
 def perfil_atual() -> str:
     return st.session_state.get('perfil', '')
 
@@ -114,45 +151,32 @@ def is_lideranca() -> bool:
     return perfil_atual() in ('admin', 'lideranca')
 
 
-def pdvs_permitidos(todos_pdvs: list) -> list:
-    """
-    Retorna a lista de PDVs que o usuário atual pode ver.
-    Admin e liderança veem todos. Consultor vê só os seus.
-    """
-    acesso = st.session_state.get('pdvs_acesso', [])
-    if not acesso:
-        return todos_pdvs
-    return [p for p in todos_pdvs if str(p) in [str(a) for a in acesso]]
-
-
-# ── Gestão de usuários (só para admin) ───────────────────────────────────────
+# ── Painel de gestão de usuários ──────────────────────────────────────────────
 
 def painel_gestao_usuarios():
-    """Painel completo de gestão de usuários — exibido só para admins."""
     if not is_admin():
         st.warning("Acesso restrito ao administrador.")
         return
 
     st.subheader("👥 Gestão de Usuários")
     usuarios = _carregar_usuarios()
-    if not usuarios:
-        usuarios = _criar_usuarios_padrao()
 
     # Tabela de usuários existentes
     with st.expander("Usuários cadastrados", expanded=True):
         for login, dados in usuarios.items():
-            c1, c2, c3, c4, c5 = st.columns([2, 2, 1.5, 1, 1])
+            c1, c2, c3, c4, c5, c6 = st.columns([2, 2, 1.5, 1.5, 1, 1])
             c1.write(f"**{dados['nome']}**")
             c2.write(login)
             c3.write(dados['perfil'].capitalize())
+            pdvs_str = ', '.join(dados.get('pdvs', [])) or 'Todos'
+            c4.write(f"PDVs: {pdvs_str}")
             status = "✅ Ativo" if dados.get('ativo') else "❌ Inativo"
-            c4.write(status)
+            c5.write(status)
             if login != 'admin':
                 novo_status = not dados.get('ativo', True)
                 label = "Desativar" if dados.get('ativo') else "Ativar"
-                if c5.button(label, key=f"toggle_{login}"):
-                    usuarios[login]['ativo'] = novo_status
-                    _salvar_usuarios(usuarios)
+                if c6.button(label, key=f"toggle_{login}"):
+                    _atualizar_campo(login, 'ativo', novo_status)
                     st.rerun()
 
     # Criar novo usuário
@@ -160,45 +184,43 @@ def painel_gestao_usuarios():
     st.markdown("**Criar novo usuário**")
     col1, col2 = st.columns(2)
     with col1:
-        novo_login  = st.text_input("Login (sem espaços)", key="novo_login")
-        novo_nome   = st.text_input("Nome completo", key="novo_nome")
-        nova_senha  = st.text_input("Senha inicial", type="password", key="nova_senha")
+        novo_login = st.text_input("Login (sem espaços)", key="novo_login")
+        novo_nome  = st.text_input("Nome completo", key="novo_nome")
+        nova_senha = st.text_input("Senha inicial", type="password", key="nova_senha")
     with col2:
         novo_perfil = st.selectbox("Perfil", ["lideranca", "consultor", "admin"], key="novo_perfil")
         novos_pdvs  = st.text_input(
-            "PDVs permitidos (separados por vírgula — deixe vazio para todos)",
+            "PDVs permitidos (separados por vírgula — vazio = todos)",
             key="novos_pdvs"
         )
 
-    if st.button("Criar usuário"):
+    if st.button("✅ Criar usuário", key="btn_criar"):
         if not novo_login or not novo_nome or not nova_senha:
             st.error("Preencha todos os campos obrigatórios.")
         elif novo_login in usuarios:
             st.error("Esse login já existe.")
         else:
             pdvs_lista = [p.strip() for p in novos_pdvs.split(',') if p.strip()] if novos_pdvs else []
-            usuarios[novo_login] = {
-                "nome": novo_nome,
-                "senha_hash": _hash(nova_senha),
-                "perfil": novo_perfil,
-                "pdvs": pdvs_lista,
-                "ativo": True,
-                "criado_em": datetime.now().isoformat()
-            }
-            _salvar_usuarios(usuarios)
-            st.success(f"Usuário '{novo_login}' criado com sucesso.")
-            st.rerun()
+            ok = _salvar_usuario(novo_login, {
+                'nome':       novo_nome,
+                'senha_hash': _hash(nova_senha),
+                'perfil':     novo_perfil,
+                'pdvs':       pdvs_lista,
+                'ativo':      True,
+            })
+            if ok:
+                st.success(f"Usuário '{novo_login}' criado com sucesso!")
+                st.rerun()
 
     # Resetar senha
     st.divider()
     st.markdown("**Resetar senha**")
     col1, col2, col3 = st.columns(3)
-    login_reset = col1.selectbox("Usuário", list(usuarios.keys()), key="login_reset")
+    login_reset      = col1.selectbox("Usuário", list(usuarios.keys()), key="login_reset")
     nova_senha_reset = col2.text_input("Nova senha", type="password", key="senha_reset")
     if col3.button("Resetar", key="btn_reset"):
         if nova_senha_reset:
-            usuarios[login_reset]['senha_hash'] = _hash(nova_senha_reset)
-            _salvar_usuarios(usuarios)
-            st.success("Senha atualizada.")
+            _atualizar_campo(login_reset, 'senha_hash', _hash(nova_senha_reset))
+            st.success(f"Senha de '{login_reset}' atualizada.")
         else:
             st.error("Digite a nova senha.")
