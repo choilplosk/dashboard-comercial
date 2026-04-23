@@ -30,18 +30,23 @@ def _norm_nome(nome: str) -> str:
 def _normalizar_meta(meta_val, real_val) -> Optional[float]:
     """
     Garante que meta e realizado estão na mesma escala.
-    Indicadores percentuais vêm em decimal (ex: pen_bt=0.388 = 38,8%)
-    ou decimal > 1 (ex: id_cliente=1.275 = 127,5%).
-    Se a meta foi cadastrada em percentual (>2) e o realizado em escala
-    decimal (<=2), converte a meta dividindo por 100.
-    Cobre casos como: 0.388 (38,8%), 1.275 (127,5%), 0.032 (3,2%).
+
+    Casos cobertos:
+    - Realizado decimal (<=2) e meta percentual (>2): divide meta por 100
+      Ex: pen_bt=0.388 vs meta=31.0 → meta vira 0.31
+    - Realizado percentual (>2) e meta decimal (<2): multiplica meta por 100
+      Ex: resgate_fidelidade=46.83 vs meta=0.52 → meta vira 52.0
+    - Demais casos: sem alteração (ambos na mesma escala)
     """
     try:
         m = float(meta_val)
         r = float(real_val)
-        # Se realizado está em escala decimal (<=2) e meta em percentual (>2), normaliza
         if r <= 2 and m > 2:
+            # Realizado em decimal, meta em percentual → divide meta por 100
             return m / 100
+        if r > 2 and m < 2:
+            # Realizado em percentual (0-100), meta em decimal → multiplica meta por 100
+            return m * 100
         return m
     except (TypeError, ValueError):
         return None
