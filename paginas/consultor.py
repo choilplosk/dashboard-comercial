@@ -53,14 +53,14 @@ def _atingimento_invertido(realizado, meta):
 
 def _cor_boleto1(at):
     """
-    Cor para Boleto 1 — at = meta/realizado:
-    at >= 1.0 → realizado <= meta → verde (bom, está dentro do limite)
+    Cor para Boleto 1 — at = meta/realizado (sempre decimal).
+    at >= 1.0 → realizado <= meta → verde (bom)
     at >= 0.95 → amarelo
     at < 0.95  → vermelho (ruim, ultrapassou o limite)
     """
     if at is None or pd.isna(at):
         return 'cinza'
-    v = at * 100 if at <= 2 else at
+    v = at * 100
     if v >= 100:
         return 'verde'
     elif v >= 95:
