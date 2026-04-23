@@ -30,15 +30,17 @@ def _norm_nome(nome: str) -> str:
 def _normalizar_meta(meta_val, real_val) -> Optional[float]:
     """
     Garante que meta e realizado estão na mesma escala.
-    Indicadores como pen_bt, conv_fluxo vêm em decimal (0-1).
-    Se a meta foi cadastrada em percentual (>2) e o realizado em decimal,
-    converte a meta dividindo por 100.
+    Indicadores percentuais vêm em decimal (ex: pen_bt=0.388 = 38,8%)
+    ou decimal > 1 (ex: id_cliente=1.275 = 127,5%).
+    Se a meta foi cadastrada em percentual (>2) e o realizado em escala
+    decimal (<=2), converte a meta dividindo por 100.
+    Cobre casos como: 0.388 (38,8%), 1.275 (127,5%), 0.032 (3,2%).
     """
     try:
         m = float(meta_val)
         r = float(real_val)
-        # Se realizado está em decimal (0-1) e meta em percentual (>2), normaliza
-        if 0 <= r <= 1 and m > 2:
+        # Se realizado está em escala decimal (<=2) e meta em percentual (>2), normaliza
+        if r <= 2 and m > 2:
             return m / 100
         return m
     except (TypeError, ValueError):
