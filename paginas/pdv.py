@@ -1,22 +1,18 @@
 """
 Aba — Por PDV.
-Botões de seleção, todos os indicadores com marcador IAF,
-x LY nos indicadores principais, NPS em Configurações.
 """
 
 import streamlit as st
 import pandas as pd
 import math
 from modulos.calculos import (
-    atingimento, cor_indicador, cor_indicador_invertido,
+    atingimento, atingimento_com_escala, cor_indicador, cor_indicador_invertido,
     fmt_brl, fmt_pct, fmt_num
 )
 from modulos.nps import carregar_nps, salvar_nps
-from modulos.supabase_db import salvar_nps_supabase
+from modulos.supabase_db import salvar_nps_supabase, carregar_nps_supabase
 from modulos.iaf import carregar_config
 
-
-# ── Helpers ───────────────────────────────────────────────────────────────────
 
 def _is_nan(v) -> bool:
     try: return math.isnan(float(v))
@@ -38,7 +34,6 @@ def _fmt_val(v, tipo='num', casas=2) -> str:
     return fmt_num(v, casas)
 
 def _fmt_ly(v) -> str:
-    """Formata variação vs LY em percentual com sinal."""
     if v is None or _is_nan(v) or v == '-': return 'n/e'
     try:
         pct = float(v) * 100
@@ -63,15 +58,12 @@ def _pesos_iaf() -> dict:
     return {ind['id']: ind['pontos'] for ind in config.get('indicadores', [])}
 
 
-# ── Card com x LY ─────────────────────────────────────────────────────────────
-
 def _card_com_ly(label, real, meta, ly=None, iaf_peso=None, tipo='num', casas=2, invertido=False):
-    """Card de indicador com meta, x Meta e x LY."""
     if invertido:
-        at = atingimento(real, meta)
+        at = atingimento_com_escala(real, meta)
         cor = cor_indicador_invertido(at) if at is not None else 'cinza'
     else:
-        at = atingimento(real, meta) if (real is not None and not _is_nan(real)
+        at = atingimento_com_escala(real, meta) if (real is not None and not _is_nan(real)
                                          and meta is not None and not _is_nan(meta)) else None
         cor = cor_indicador(at) if at is not None else 'cinza'
 
@@ -112,28 +104,23 @@ def _card_com_ly(label, real, meta, ly=None, iaf_peso=None, tipo='num', casas=2,
     """, unsafe_allow_html=True)
 
 
-# ── Card simples (sem x LY) ───────────────────────────────────────────────────
-
 def _card(label, real, meta, iaf_peso=None, tipo='num', casas=2, invertido=False):
     _card_com_ly(label, real, meta, ly=None,
                  iaf_peso=iaf_peso, tipo=tipo, casas=casas, invertido=invertido)
 
 
-# ── Linha da tabela de consultores ────────────────────────────────────────────
-
 def _linha_tabela(row) -> dict:
     def get(col): return row.get(col)
 
-    at_r  = atingimento(get('receita'),          get('meta_receita'))
-    at_bm = atingimento(get('boleto_medio'),      get('meta_boleto_medio'))
-    at_it = atingimento(get('itens_por_boleto'),  get('meta_itens_boleto'))
-    at_sv = atingimento(get('servicos_real'),      get('meta_servicos'))
-    at_bt = atingimento(get('pen_bt'),             get('meta_pen_bt'))
-    at_bp = atingimento(get('pen_bp'),             get('meta_pen_bp'))
-    at_fc = atingimento(get('pen_facial'),         get('meta_pen_facial'))
-    at_id = atingimento(get('pct_id_cliente_iaf'), get('meta_pct_id_cliente'))
-    # Resgate Fidelidade — cor invertida
-    at_rf = atingimento(get('resgate_fidelidade'), get('meta_resgate_fidelidade'))
+    at_r  = atingimento_com_escala(get('receita'),          get('meta_receita'))
+    at_bm = atingimento_com_escala(get('boleto_medio'),      get('meta_boleto_medio'))
+    at_it = atingimento_com_escala(get('itens_por_boleto'),  get('meta_itens_boleto'))
+    at_sv = atingimento_com_escala(get('servicos_real'),      get('meta_servicos'))
+    at_bt = atingimento_com_escala(get('pen_bt'),             get('meta_pen_bt'))
+    at_bp = atingimento_com_escala(get('pen_bp'),             get('meta_pen_bp'))
+    at_fc = atingimento_com_escala(get('pen_facial'),         get('meta_pen_facial'))
+    at_id = atingimento_com_escala(get('pct_id_cliente_iaf'), get('meta_pct_id_cliente'))
+    at_rf = atingimento_com_escala(get('resgate_fidelidade'), get('meta_resgate_fidelidade'))
 
     sem_meta = get('meta_receita') is None or _is_nan(get('meta_receita') or float('nan'))
     trein_pct = get('treinamento_pct')
@@ -148,7 +135,6 @@ def _linha_tabela(row) -> dict:
         if sem: return '⚪ s/ meta'
         return f"{s(at,inv)} {at*100:.1f}%" if at is not None else '⚪ n/e'
 
-    # Resgate Fidelidade: valor já vem × 100 do arquivo PDV
     rf_real = get('resgate_fidelidade')
     rf_str = f"{rf_real:.1f}%" if rf_real is not None and not _is_nan(rf_real) else 'n/e'
     rf_meta = get('meta_resgate_fidelidade')
@@ -178,8 +164,6 @@ def _linha_tabela(row) -> dict:
     }
 
 
-# ── Render principal ──────────────────────────────────────────────────────────
-
 def render(dados: dict):
     st.header("🏪 Resultado por PDV")
 
@@ -194,7 +178,6 @@ def render(dados: dict):
         st.warning("Nenhum PDV encontrado.")
         return
 
-    # ── Botões de PDV ─────────────────────────────────────────────────────────
     if 'pdv_selecionado' not in st.session_state or \
        st.session_state['pdv_selecionado'] not in pdvs:
         st.session_state['pdv_selecionado'] = pdvs[0]
@@ -214,10 +197,8 @@ def render(dados: dict):
     pdv_int = int(pdv_sel)
     st.divider()
 
-    # ── Pesos IAF ─────────────────────────────────────────────────────────────
     pesos = _pesos_iaf()
 
-    # ── Helpers de meta ───────────────────────────────────────────────────────
     def meta_media(col):
         if metas.empty or col not in metas.columns: return None
         v = pd.to_numeric(metas[metas['pdv']==pdv_int][col], errors='coerce').mean()
@@ -228,7 +209,6 @@ def render(dados: dict):
         v = pd.to_numeric(metas[metas['pdv']==pdv_int][col], errors='coerce').sum()
         return None if v == 0 else v
 
-    # ── Dados do arquivo PDV ──────────────────────────────────────────────────
     df_pdv_dados = dados.get('pdv')
     pdv_row = None
     if df_pdv_dados is not None and not df_pdv_dados.empty:
@@ -243,20 +223,19 @@ def render(dados: dict):
         return None
 
     def get_base_media(col):
-        """Busca média de uma coluna da base calculada para o PDV selecionado."""
         df_pdv_calc = base[base['pdv'] == pdv_int].copy()
         is_ger = df_pdv_calc['is_gerente'].fillna(False).astype(bool) if 'is_gerente' in df_pdv_calc.columns else pd.Series(False, index=df_pdv_calc.index)
         df_pdv_calc = df_pdv_calc[~is_ger]
         if col not in df_pdv_calc.columns:
             return None
         vals = pd.to_numeric(df_pdv_calc[col], errors='coerce')
-        vals = vals[vals > 0]  # exclui zeros
+        vals = vals[vals > 0]
         return vals.mean() if not vals.empty else None
 
-    nps_dict = carregar_nps()
+    # CORRIGIDO: usa carregar_nps_supabase() em vez de carregar_nps() local
+    nps_dict = carregar_nps_supabase()
     nps_val  = nps_dict.get(str(pdv_int))
 
-    # ── Bloco 1: Indicadores Comerciais ──────────────────────────────────────
     st.markdown('<div class="card-secao">', unsafe_allow_html=True)
     st.markdown(f"#### PDV {pdv_sel} — Indicadores Comerciais")
 
@@ -290,7 +269,6 @@ def render(dados: dict):
 
     st.markdown('</div>', unsafe_allow_html=True)
 
-    # ── Bloco 2: Penetrações ──────────────────────────────────────────────────
     st.markdown('<div class="card-secao">', unsafe_allow_html=True)
     st.markdown("#### Penetrações e Mix")
 
@@ -303,10 +281,8 @@ def render(dados: dict):
     c5, c6, c7, c8 = st.columns(4)
     with c5: _card("💛 Fidelidade",   get_pdv('pen_fidelidade'),  meta_media('meta_pen_fidelidade'),   None, 'pct')
     with c6:
-        # Resgate Fidelidade — valor já × 100, lógica invertida
         rf_real = get_pdv('resgate_fidelidade')
         rf_meta = meta_media('meta_resgate_fidelidade')
-        # Meta vem em decimal (0.52), converte para percentual para comparar
         rf_meta_pct = rf_meta * 100 if rf_meta is not None else None
         _card("🔄 Resg. Fid.",  rf_real, rf_meta_pct,
               pesos.get('resgate_fidelidade'), 'num', 1, invertido=False)
@@ -315,7 +291,6 @@ def render(dados: dict):
 
     st.markdown('</div>', unsafe_allow_html=True)
 
-    # ── Bloco 3: Tabela de Consultores ────────────────────────────────────────
     st.markdown('<div class="card-secao">', unsafe_allow_html=True)
     st.markdown(f"#### Consultores — PDV {pdv_sel}")
 
@@ -336,7 +311,6 @@ def render(dados: dict):
 
     st.markdown('</div>', unsafe_allow_html=True)
 
-    # ── Configurações ─────────────────────────────────────────────────────────
     with st.expander("⚙️ Configurações do PDV"):
         st.markdown("**Lançar NPS**")
         st.caption("O NPS representa o resultado da loja inteira — inserido manualmente.")
@@ -348,9 +322,7 @@ def render(dados: dict):
             key=f"nps_cfg_{pdv_sel}"
         )
         if st.button("💾 Salvar NPS", key=f"salvar_nps_{pdv_sel}"):
-            nps_dict[str(pdv_int)] = novo_nps
-            salvar_nps(nps_dict)
             salvar_nps_supabase(pdv_int, novo_nps)
+            carregar_nps_supabase.clear()
             st.success(f"NPS do PDV {pdv_sel} salvo: {novo_nps:.1f}")
             st.rerun()
-
