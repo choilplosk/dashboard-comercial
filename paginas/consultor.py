@@ -149,13 +149,13 @@ def render(dados: dict, nps_por_pdv: dict):
 
         linhas = []
         for _, row in df_consultores.iterrows():
-            at_r   = atingimento(row.get('receita'),          row.get('meta_receita'))
-            at_bm  = atingimento(row.get('boleto_medio'),     row.get('meta_boleto_medio'))
-            at_it  = atingimento(row.get('itens_por_boleto'), row.get('meta_itens_boleto'))
-            at_bt  = atingimento(row.get('pen_bt'),           row.get('meta_pen_bt'))
-            at_bp  = atingimento(row.get('pen_bp'),           row.get('meta_pen_bp'))
-            at_fac = atingimento(row.get('pen_facial'),       row.get('meta_pen_facial'))
-            at_sv  = atingimento(row.get('servicos_real'),    row.get('meta_servicos'))
+            at_r   = atingimento_com_escala(row.get('receita'),          row.get('meta_receita'))
+            at_bm  = atingimento_com_escala(row.get('boleto_medio'),     row.get('meta_boleto_medio'))
+            at_it  = atingimento_com_escala(row.get('itens_por_boleto'), row.get('meta_itens_boleto'))
+            at_bt  = atingimento_com_escala(row.get('pen_bt'),           row.get('meta_pen_bt'))
+            at_bp  = atingimento_com_escala(row.get('pen_bp'),           row.get('meta_pen_bp'))
+            at_fac = atingimento_com_escala(row.get('pen_facial'),       row.get('meta_pen_facial'))
+            at_sv  = atingimento_com_escala(row.get('servicos_real'),    row.get('meta_servicos'))
 
             sem_meta = row.get('meta_receita') is None or pd.isna(row.get('meta_receita', float('nan')))
 
@@ -310,7 +310,7 @@ def render(dados: dict, nps_por_pdv: dict):
         ]
         vals = []
         for col_r, col_m in pares_radar:
-            at = atingimento(row.get(col_r), row.get(col_m))
+            at = atingimento_com_escala(row.get(col_r), row.get(col_m))
             vals.append(min(round(at*100, 1), 150) if at is not None else 0)
 
         vals_f = vals + [vals[0]]
