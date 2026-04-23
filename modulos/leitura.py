@@ -258,9 +258,9 @@ def processar_id_cliente(df: pd.DataFrame) -> pd.DataFrame:
     }
     df = df.rename(columns={k: v for k, v in renomear.items() if k in df.columns})
 
-    # Coluna L (índice 11) = % BOLETOS ID CLIENTE VÁLIDOS (IAF) — indicador correto
-    if len(cols) > 11:
-        df = df.rename(columns={cols[11]: 'pct_id_cliente_iaf'})
+    # Coluna E (índice 4) = % Atendimentos com CPF (IAF 2026) — indicador oficial
+    if len(cols) > 4:
+        df = df.rename(columns={cols[4]: 'pct_id_cliente_iaf'})
 
     df['pdv'] = pd.to_numeric(df['pdv'], errors='coerce').astype('Int64')
     df['consultor'] = df['consultor'].astype(str).str.strip().str.title()
