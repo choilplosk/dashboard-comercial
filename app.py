@@ -212,7 +212,7 @@ if 'metas' not in dados or dados.get('metas', pd.DataFrame()).empty:
 # ── Monta base calculada ──────────────────────────────────────────────────────
 # VERSÃO DO CACHE: incrementar sempre que alterar calculos.py ou iaf.py
 # para forçar recálculo e invalidar cache antigo.
-CACHE_VERSION = "v3"
+CACHE_VERSION = "v4"
 
 @st.cache_data(show_spinner="Processando dados...")
 def _montar_base(hash_k: str, _dados: dict) -> pd.DataFrame:
