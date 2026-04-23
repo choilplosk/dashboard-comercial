@@ -11,7 +11,7 @@ from modulos.calculos import (
     fmt_brl, fmt_pct, fmt_num, atingimento, atingimento_com_escala
 )
 from modulos.iaf import calcular_iaf_base, carregar_config
-from modulos.nps import carregar_nps
+from modulos.supabase_db import carregar_nps_supabase as carregar_nps
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
