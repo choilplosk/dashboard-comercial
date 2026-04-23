@@ -78,9 +78,10 @@ def atingimento_com_escala(realizado, meta) -> Optional[float]:
 
 
 def cor_indicador(pct: Optional[float]) -> str:
+    """pct é sempre decimal (ex: 1.05 = 105%). Multiplica por 100 sempre."""
     if pct is None or pd.isna(pct):
         return 'cinza'
-    v = pct * 100 if pct <= 2 else pct
+    v = pct * 100
     if v >= 100:
         return 'verde'
     elif v >= 95:
@@ -90,9 +91,10 @@ def cor_indicador(pct: Optional[float]) -> str:
 
 
 def cor_indicador_invertido(pct: Optional[float]) -> str:
+    """pct é sempre decimal (ex: 0.77 = 77%). Multiplica por 100 sempre."""
     if pct is None or pd.isna(pct):
         return 'cinza'
-    v = pct * 100 if pct <= 2 else pct
+    v = pct * 100
     if v <= 100:
         return 'verde'
     elif v <= 110:
