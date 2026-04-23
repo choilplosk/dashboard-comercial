@@ -97,7 +97,6 @@ with st.sidebar:
     )
     st.divider()
 
-    # ── Menu de navegação ─────────────────────────────────────────────────────
     MENU = [
         ('resumo',    '🏠', 'Resumo Consolidado'),
         ('pdv',       '🏪', 'Por PDV'),
@@ -106,7 +105,6 @@ with st.sidebar:
         ('iaf',       '🎯', 'IAF'),
         ('ia',        '🤖', 'IA & Chat'),
     ]
-    # Metas só para liderança e admin
     if is_lideranca():
         MENU.append(('metas', '🎯', 'Gestão de Metas'))
 
@@ -126,7 +124,6 @@ with st.sidebar:
 
     st.divider()
 
-    # ── Status Supabase ───────────────────────────────────────────────────────
     ultimo = data_ultimo_upload()
     if ultimo:
         st.markdown(
@@ -135,7 +132,6 @@ with st.sidebar:
             unsafe_allow_html=True
         )
 
-    # ── Upload (visível para todos, mas salva no Supabase) ────────────────────
     st.markdown(
         "<div style='font-size:12px;color:#94a3b8;padding:4px 8px 2px;font-weight:600;'>"
         "📁 Atualizar dados</div>",
@@ -143,13 +139,11 @@ with st.sidebar:
     )
     novos_dados = widget_upload_sidebar()
 
-    # Processa e salva no Supabase quando novos arquivos chegam
     if novos_dados and 'consultor' in novos_dados:
         for tipo, df in novos_dados.items():
             if not tipo.startswith('_'):
                 st.session_state['dados'][tipo] = df
 
-        # Botão para confirmar salvamento
         data_ref = st.sidebar.date_input(
             "Data de referência dos dados",
             value=date.today(),
@@ -160,7 +154,6 @@ with st.sidebar:
                 ok = salvar_upload(st.session_state['dados'], data_ref)
                 if ok:
                     st.sidebar.success("✅ Dados salvos!")
-                    # Limpa dados da sessão para forçar recarga do Supabase
                     st.session_state['dados'] = {}
                     st.session_state['supabase_carregado'] = False
                     st.rerun()
@@ -178,7 +171,6 @@ with st.sidebar:
 # ── Carrega dados do Supabase automaticamente ────────────────────────────────
 dados = st.session_state['dados']
 
-# Sempre tenta carregar se não tem dados de consultor na sessão
 if 'consultor' not in dados:
     try:
         from supabase import create_client
@@ -211,7 +203,6 @@ if 'consultor' not in dados:
     except Exception as _e:
         st.error(f"Erro ao carregar dados: {_e}")
 
-# Carrega metas do Supabase se não há no estado local
 if 'metas' not in dados or dados.get('metas', pd.DataFrame()).empty:
     metas_supa = carregar_metas()
     if not metas_supa.empty:
@@ -219,6 +210,10 @@ if 'metas' not in dados or dados.get('metas', pd.DataFrame()).empty:
         st.session_state['dados'] = dados
 
 # ── Monta base calculada ──────────────────────────────────────────────────────
+# VERSÃO DO CACHE: incrementar sempre que alterar calculos.py ou iaf.py
+# para forçar recálculo e invalidar cache antigo.
+CACHE_VERSION = "v3"
+
 @st.cache_data(show_spinner="Processando dados...")
 def _montar_base(hash_k: str, _dados: dict) -> pd.DataFrame:
     from modulos.calculos import montar_base_consultores, calcular_atingimentos
@@ -232,14 +227,16 @@ def _montar_base(hash_k: str, _dados: dict) -> pd.DataFrame:
     return calcular_atingimentos(base)
 
 if 'consultor' in dados:
-        hash_k = (str(sorted([k for k in dados.keys() if not k.startswith('_')])) +
-                  str(len(dados.get('consultor', pd.DataFrame()))) +
-                  str(len(dados.get('metas', pd.DataFrame()))))
-        base_calc = _montar_base(hash_k, dados)
-        dados['_base_calculada'] = base_calc
-        st.session_state['dados'] = dados
+    hash_k = (
+        str(sorted([k for k in dados.keys() if not k.startswith('_')])) +
+        str(len(dados.get('consultor', pd.DataFrame()))) +
+        str(len(dados.get('metas', pd.DataFrame()))) +
+        CACHE_VERSION  # força recálculo quando código muda
+    )
+    base_calc = _montar_base(hash_k, dados)
+    dados['_base_calculada'] = base_calc
+    st.session_state['dados'] = dados
 
-# NPS do Supabase
 nps_atual = carregar_nps_supabase()
 
 # ── Roteador de páginas ───────────────────────────────────────────────────────
