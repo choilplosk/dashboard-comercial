@@ -8,7 +8,7 @@ import plotly.graph_objects as go
 import pandas as pd
 from modulos.calculos import (
     cor_indicador, cor_indicador_invertido, CORES, CORES_IAF,
-    fmt_brl, fmt_pct, fmt_num, atingimento
+    fmt_brl, fmt_pct, fmt_num, atingimento, atingimento_com_escala
 )
 from modulos.iaf import calcular_iaf_base, carregar_config
 from modulos.nps import carregar_nps
@@ -233,22 +233,22 @@ def render(dados: dict, nps_por_pdv: dict):
         c1, c2, c3, c4 = st.columns(4)
 
         with c1:
-            at = atingimento(row.get('receita'), row.get('meta_receita'))
+            at = atingimento_com_escala(row.get('receita'), row.get('meta_receita'))
             _card("💰 Receita",
                   row.get('receita'), row.get('meta_receita'), at,
                   fmt_fn=fmt_brl, iaf_peso=pesos_iaf.get('receita'))
         with c2:
-            at = atingimento(row.get('boleto_medio'), row.get('meta_boleto_medio'))
+            at = atingimento_com_escala(row.get('boleto_medio'), row.get('meta_boleto_medio'))
             _card("🧾 Boleto Médio",
                   row.get('boleto_medio'), row.get('meta_boleto_medio'), at,
                   fmt_fn=fmt_brl)
         with c3:
-            at = atingimento(row.get('itens_por_boleto'), row.get('meta_itens_boleto'))
+            at = atingimento_com_escala(row.get('itens_por_boleto'), row.get('meta_itens_boleto'))
             _card("📦 Itens/Boleto",
                   row.get('itens_por_boleto'), row.get('meta_itens_boleto'), at,
                   fmt_fn=lambda v: fmt_num(v, 2))
         with c4:
-            at = atingimento(row.get('servicos_real'), row.get('meta_servicos'))
+            at = atingimento_com_escala(row.get('servicos_real'), row.get('meta_servicos'))
             _card("✂️ Serviços",
                   row.get('servicos_real'), row.get('meta_servicos'), at,
                   fmt_fn=lambda v: fmt_num(v, 0),
@@ -286,7 +286,7 @@ def render(dados: dict, nps_por_pdv: dict):
             if inv:
                 at = _atingimento_invertido(real_v, meta_v)
             else:
-                at = atingimento(real_v, meta_v)
+                at = atingimento_com_escala(real_v, meta_v)
 
             peso = pesos_iaf.get(iaf_id) if iaf_id else None
             with cols_pen[i % 3]:
