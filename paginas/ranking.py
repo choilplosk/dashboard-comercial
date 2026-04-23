@@ -1,13 +1,13 @@
 """
 Aba Ranking.
-Ranking de consultores por indicador + botão para alternar ranking de gerentes.
 """
 
 import streamlit as st
 import plotly.graph_objects as go
 import pandas as pd
 from modulos.calculos import (
-    cor_indicador, CORES, fmt_brl, fmt_pct, fmt_num, atingimento
+    cor_indicador, CORES, fmt_brl, fmt_pct, fmt_num,
+    atingimento, atingimento_com_escala
 )
 from modulos.iaf import consolidar_gerentes
 
@@ -61,7 +61,6 @@ def render(dados: dict, nps_por_pdv: dict = None):
         st.info("Carregue os arquivos para continuar.")
         return
 
-    # Toggle consultores / gerentes
     if 'ranking_modo' not in st.session_state:
         st.session_state['ranking_modo'] = 'consultores'
 
@@ -81,7 +80,6 @@ def render(dados: dict, nps_por_pdv: dict = None):
 
     st.divider()
 
-    # ── RANKING CONSULTORES ───────────────────────────────────────────────────
     if st.session_state['ranking_modo'] == 'consultores':
         is_ger = base.get('is_gerente', pd.Series(False, index=base.index)).fillna(False).astype(bool)
         df_cons = base[~is_ger].copy()
@@ -110,7 +108,7 @@ def render(dados: dict, nps_por_pdv: dict = None):
             col_meta = f"meta_{col_base}"
             if col_base in df_rank.columns and col_meta in df_rank.columns:
                 df_rank[col_val] = df_rank.apply(
-                    lambda r: atingimento(r.get(col_base), r.get(col_meta)), axis=1
+                    lambda r: atingimento_com_escala(r.get(col_base), r.get(col_meta)), axis=1
                 )
 
         df_rank = df_rank.dropna(subset=[col_val]).sort_values(col_val, ascending=False).reset_index(drop=True)
@@ -136,23 +134,13 @@ def render(dados: dict, nps_por_pdv: dict = None):
                 with st.expander(f"⚪ Sem meta ({len(sem_meta_df)})"):
                     st.dataframe(sem_meta_df.rename(columns={'consultor':'Consultor','pdv':'PDV'}),
                                  use_container_width=True, hide_index=True)
-
-    # ── RANKING GERENTES ──────────────────────────────────────────────────────
     else:
-        st.markdown(
-            "Ranking consolidado dos gerentes pelas lojas que gerenciam. "
-            "Gerentes com mais de uma loja têm resultados unificados "
-            "(soma para volumes, média simples para taxas)."
-        )
-
+        st.markdown("Ranking consolidado dos gerentes pelas lojas que gerenciam.")
         is_ger = base.get('is_gerente', pd.Series(False, index=base.index)).fillna(False).astype(bool)
         df_ger_raw = base[is_ger]
 
         if df_ger_raw.empty:
-            st.info(
-                "Nenhum gerente identificado nos dados. "
-                "Gerentes são reconhecidos pela meta 'GERENTE' no arquivo de metas."
-            )
+            st.info("Nenhum gerente identificado nos dados.")
             st.markdown("**Visão alternativa: receita consolidada por PDV**")
             from modulos.calculos import TIPO_AGREGACAO
             colunas_agg = {c: ('sum' if TIPO_AGREGACAO.get(c)=='soma' else 'mean')
@@ -195,8 +183,7 @@ def render(dados: dict, nps_por_pdv: dict = None):
                            .sort_values(col_ger, ascending=False)
                            .reset_index(drop=True))
             df_ger_rank.index += 1
-            fig_ger = _grafico(df_ger_rank, col_ger, fmt_ger,
-                               f"Ranking Gerentes — {metrica_ger}")
+            fig_ger = _grafico(df_ger_rank, col_ger, fmt_ger, f"Ranking Gerentes — {metrica_ger}")
             st.plotly_chart(fig_ger, use_container_width=True)
         else:
             st.info(f"Indicador '{metrica_ger}' não disponível para gerentes.")
