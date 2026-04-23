@@ -175,34 +175,76 @@ def processar_pdv(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
+def _limpar_valor_meta(v) -> float:
+    """
+    Converte valores de meta formatados para float.
+    Aceita: '28,0%', 'R$ 35.650,00', '7,00', 0.28, 35650.0 etc.
+    """
+    if v is None:
+        return float('nan')
+    if isinstance(v, (int, float)):
+        return float(v)
+    s = str(v).strip()
+    if s.upper() in ('', 'NAN', 'NONE', '-', 'GERENTE'):
+        return float('nan')
+    # Remove R$, espaços, pontos de milhar, converte vírgula decimal, remove %
+    s = s.replace('R$', '').replace(' ', '')
+    # Trata separador de milhar (ponto) e decimal (vírgula) — padrão BR
+    # Ex: '35.650,00' → '35650.00'
+    if ',' in s and '.' in s:
+        s = s.replace('.', '').replace(',', '.')
+    elif ',' in s:
+        s = s.replace(',', '.')
+    s = s.replace('%', '').strip()
+    try:
+        return float(s)
+    except ValueError:
+        return float('nan')
+
+
 def processar_metas(df: pd.DataFrame) -> pd.DataFrame:
     df = df[df.iloc[:, 0].notna()].copy()
     df.columns = [str(c).strip() for c in df.columns]
 
+    # Aceita tanto nomes do upload manual quanto nomes do Supabase exportado
     renomear = {
         'Consultor': 'consultor',
         'PDV': 'pdv',
         'Receita': 'meta_receita',
+        'Receita (R$)': 'meta_receita',
         'Boleto Médio': 'meta_boleto_medio',
+        'Boleto Médio (R$)': 'meta_boleto_medio',
         'Itens por Boleto': 'meta_itens_boleto',
+        'Itens/Boleto': 'meta_itens_boleto',
         'Preço Médio': 'meta_preco_medio',
+        'Preço Médio (R$)': 'meta_preco_medio',
         'Penetração de Boleto Turbinado': 'meta_pen_bt',
+        'Pen. BT (%)': 'meta_pen_bt',
         'Penetração de Boleto Promocional': 'meta_pen_bp',
+        'Pen. BP (%)': 'meta_pen_bp',
         'Penetração de Receita Mobshop': 'meta_pen_mobshop',
+        'Pen. Mobshop (%)': 'meta_pen_mobshop',
         'Penetração de Boletos 1': 'meta_pen_boletos1',
+        'Pen. Boletos 1 (%)': 'meta_pen_boletos1',
         'Penetração de Boletos Fidelidade': 'meta_pen_fidelidade',
+        'Pen. Fidelidade (%)': 'meta_pen_fidelidade',
         'Resgate Fidelidade': 'meta_resgate_fidelidade',
+        'Resgate Fid. (%)': 'meta_resgate_fidelidade',
         'Conversão de Ação de Fluxo': 'meta_conv_fluxo',
+        'Conv. Fluxo (%)': 'meta_conv_fluxo',
         'Penetração de Cuidados Faciais': 'meta_pen_facial',
+        'Pen. Facial (%)': 'meta_pen_facial',
         '% Boletos ID Cliente': 'meta_pct_id_cliente',
+        'ID Cliente (%)': 'meta_pct_id_cliente',
         'Serviços': 'meta_servicos',
         'NPS': 'meta_nps',
     }
     df = df.rename(columns={k: v for k, v in renomear.items() if k in df.columns})
-    df['is_gerente'] = df['meta_receita'].astype(str).str.upper().str.strip() == 'GERENTE'
+    df['is_gerente'] = df.get('meta_receita', pd.Series(dtype=str)).astype(str).str.upper().str.strip() == 'GERENTE'
 
+    # Usa _limpar_valor_meta para aceitar valores formatados (R$, %, vírgulas)
     for c in [col for col in df.columns if col.startswith('meta_')]:
-        df[c] = pd.to_numeric(df[c], errors='coerce')
+        df[c] = df[c].apply(_limpar_valor_meta)
 
     df['pdv'] = pd.to_numeric(df['pdv'], errors='coerce').astype('Int64')
     df['consultor'] = df['consultor'].astype(str).str.strip().str.title()
