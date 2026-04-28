@@ -13,24 +13,42 @@ from modulos.calculos import (
 from modulos.iaf import calcular_iaf_base
 
 
-def _badge_cor(cor: str) -> str:
+def _badge_cor(cor: str):
     mapa = {
         'verde':    ('#dcfce7', '#166534'),
         'amarelo':  ('#fef9c3', '#854d0e'),
         'vermelho': ('#fee2e2', '#991b1b'),
         'cinza':    ('#f3f4f6', '#374151'),
     }
-    bg, fg = mapa.get(cor, mapa['cinza'])
-    return bg, fg
+    return mapa.get(cor, mapa['cinza'])
 
 
-def _card_indicador(nome: str, real, meta, at, cor: str, fmt_fn=None):
-    """Renderiza um card de indicador com semáforo de cor."""
+def _fmt_vs_ly(v) -> str:
+    """Formata variação vs LY com seta colorida."""
+    if v is None:
+        return ''
+    try:
+        import math
+        f = float(v)
+        if math.isnan(f) or str(v) == '-':
+            return ''
+        pct = f * 100
+        sinal = '▲' if pct >= 0 else '▼'
+        cor = '#16a34a' if pct >= 0 else '#dc2626'
+        return (f'<div style="font-size:11px;color:{cor};font-weight:600;margin-top:3px;">'
+                f'{sinal} {abs(pct):.1f}% vs LY</div>')
+    except (TypeError, ValueError):
+        return ''
+
+
+def _card_indicador(nome: str, real, meta, at, cor: str, fmt_fn=None, vs_ly=None):
+    """Renderiza um card de indicador com semáforo de cor e vs LY opcional."""
     bg, fg = _badge_cor(cor)
     fmt = fmt_fn or fmt_num
     real_str = fmt(real) if real is not None else "—"
     meta_str = fmt(meta) if meta is not None else "—"
     at_str   = f"{at*100:.1f}%" if at is not None else "—"
+    ly_html  = _fmt_vs_ly(vs_ly) if vs_ly is not None else ''
 
     st.markdown(f"""
     <div style="background:{bg}; border-radius:10px; padding:14px 16px; margin-bottom:8px;">
@@ -39,8 +57,40 @@ def _card_indicador(nome: str, real, meta, at, cor: str, fmt_fn=None):
         <div style="font-size:12px; color:{fg}; opacity:0.8;">
             Meta: {meta_str} &nbsp;|&nbsp; x Meta: {at_str}
         </div>
+        {ly_html}
     </div>
     """, unsafe_allow_html=True)
+
+
+def _get_vs_ly_total(dados: dict) -> dict:
+    """Busca os valores vs LY da linha TOTAL do arquivo PDV."""
+    df_pdv = dados.get('pdv')
+    if df_pdv is None or df_pdv.empty:
+        return {}
+    # A linha TOTAL já foi removida no processamento — buscar do raw
+    # Precisamos do df original antes do processamento
+    # Alternativa: usar a média ponderada das linhas disponíveis
+    # Como pdv já está processado, calculamos a média ponderada dos vs_ly por PDV
+    resultado = {}
+    try:
+        if 'receita_vs_ly' in df_pdv.columns:
+            # Média ponderada pela receita
+            rec = pd.to_numeric(df_pdv.get('receita', pd.Series()), errors='coerce')
+            for col, chave in [
+                ('receita_vs_ly',          'receita'),
+                ('boleto_medio_vs_ly',     'boleto_medio'),
+                ('itens_por_boleto_vs_ly', 'itens_por_boleto'),
+                ('preco_medio_vs_ly',      'preco_medio'),
+            ]:
+                if col in df_pdv.columns:
+                    vals = pd.to_numeric(df_pdv[col], errors='coerce')
+                    # Média simples entre os PDVs (exclui NaN e '-')
+                    validos = vals.dropna()
+                    if not validos.empty:
+                        resultado[chave] = validos.mean()
+    except Exception:
+        pass
+    return resultado
 
 
 def render(dados: dict, nps_por_pdv: dict):
@@ -57,6 +107,7 @@ def render(dados: dict, nps_por_pdv: dict):
 
     metas = dados['metas']
     consolidado = resumo_consolidado(base_raw, metas)
+    vs_ly = _get_vs_ly_total(dados)
 
     # ── KPIs principais ──────────────────────────────────────────────────────
     st.subheader("Indicadores Principais")
@@ -69,13 +120,20 @@ def render(dados: dict, nps_por_pdv: dict):
         d = consolidado[nome]
         with cols[i]:
             if nome == 'Receita':
-                _card_indicador(nome, d['realizado'], d['meta'], d['atingimento'], d['cor'], fmt_brl)
-            elif nome in ('Boleto Médio', 'Preço Médio'):
-                _card_indicador(nome, d['realizado'], d['meta'], d['atingimento'], d['cor'], fmt_brl)
+                _card_indicador(nome, d['realizado'], d['meta'], d['atingimento'], d['cor'],
+                                fmt_brl, vs_ly=vs_ly.get('receita'))
+            elif nome == 'Boleto Médio':
+                _card_indicador(nome, d['realizado'], d['meta'], d['atingimento'], d['cor'],
+                                fmt_brl, vs_ly=vs_ly.get('boleto_medio'))
+            elif nome == 'Itens/Boleto':
+                _card_indicador(nome, d['realizado'], d['meta'], d['atingimento'], d['cor'],
+                                lambda v: fmt_num(v, 1), vs_ly=vs_ly.get('itens_por_boleto'))
+            elif nome == 'Preço Médio':
+                _card_indicador(nome, d['realizado'], d['meta'], d['atingimento'], d['cor'],
+                                fmt_brl, vs_ly=vs_ly.get('preco_medio'))
             elif nome == 'Serviços':
-                _card_indicador(nome, d['realizado'], d['meta'], d['atingimento'], d['cor'], lambda v: fmt_num(v, 0))
-            else:
-                _card_indicador(nome, d['realizado'], d['meta'], d['atingimento'], d['cor'], lambda v: fmt_num(v, 1))
+                _card_indicador(nome, d['realizado'], d['meta'], d['atingimento'], d['cor'],
+                                lambda v: fmt_num(v, 0))
 
     st.divider()
 
@@ -93,7 +151,6 @@ def render(dados: dict, nps_por_pdv: dict):
         d = consolidado[nome]
         with cols2[i % 3]:
             if nome == 'Resgate Fidelidade':
-                # Realizado já vem × 100 (ex: 56.2%), meta em decimal — lógica normal
                 meta_rf = d['meta'] * 100 if d['meta'] is not None else None
                 at_rf = atingimento(d['realizado'], meta_rf)
                 cor_rf = cor_indicador(at_rf) if at_rf is not None else 'cinza'
@@ -123,7 +180,6 @@ def render(dados: dict, nps_por_pdv: dict):
         cor_media = cor_indicador(at_media / 100 if at_media else None)
         bg_m, fg_m = _badge_cor(cor_media)
 
-        # Card de NPS médio
         col_med, col_esp = st.columns([1, 3])
         with col_med:
             st.markdown(f"""
@@ -134,7 +190,6 @@ def render(dados: dict, nps_por_pdv: dict):
             </div>
             """, unsafe_allow_html=True)
 
-        # Cards por PDV
         st.caption("Por PDV:")
         cols_nps = st.columns(min(len(pdvs_com_nps), 4))
         for i, (pdv, valor) in enumerate(pdvs_com_nps.items()):
@@ -156,29 +211,22 @@ def render(dados: dict, nps_por_pdv: dict):
     # ── Gráfico receita vs meta por PDV ──────────────────────────────────────
     st.subheader("Receita vs. Meta por PDV")
 
-    pdv_rec = base_raw[~base_raw.get('is_gerente', pd.Series(False, index=base_raw.index))].groupby('pdv').agg(
-        receita=('receita', 'sum')
-    ).reset_index()
+    _mask_ger = base_raw['is_gerente'].fillna(False).astype(bool) if 'is_gerente' in base_raw.columns else pd.Series(False, index=base_raw.index)
+    pdv_rec = base_raw[~_mask_ger].groupby('pdv').agg(receita=('receita', 'sum')).reset_index()
 
-    meta_pdv = metas[~metas.get('is_gerente', pd.Series(False, index=metas.index))].groupby('pdv').agg(
-        meta=('meta_receita', 'sum')
-    ).reset_index()
+    _mask_ger_m = metas['is_gerente'].fillna(False).astype(bool) if 'is_gerente' in metas.columns else pd.Series(False, index=metas.index)
+    meta_pdv = metas[~_mask_ger_m].groupby('pdv').agg(meta=('meta_receita', 'sum')).reset_index()
 
     pdv_merge = pdv_rec.merge(meta_pdv, on='pdv', how='left')
     pdv_merge['pdv'] = pdv_merge['pdv'].astype(str)
-    pdv_merge['at'] = pdv_merge.apply(
-        lambda r: atingimento_pct(r['receita'], r['meta']), axis=1
-    )
-    pdv_merge['cor'] = pdv_merge['at'].apply(
-        lambda v: CORES[cor_indicador(v / 100 if v else None)]
-    )
+    pdv_merge['at'] = pdv_merge.apply(lambda r: atingimento_pct(r['receita'], r['meta']), axis=1)
+    pdv_merge['cor'] = pdv_merge['at'].apply(lambda v: CORES[cor_indicador(v / 100 if v else None)])
 
     fig = go.Figure()
     fig.add_bar(
         name="Realizado", x=pdv_merge['pdv'], y=pdv_merge['receita'],
         marker_color=pdv_merge['cor'].tolist(),
-        text=pdv_merge['receita'].apply(fmt_brl),
-        textposition='outside'
+        text=pdv_merge['receita'].apply(fmt_brl), textposition='outside'
     )
     fig.add_scatter(
         name="Meta", x=pdv_merge['pdv'], y=pdv_merge['meta'],
@@ -212,8 +260,7 @@ def render(dados: dict, nps_por_pdv: dict):
         x=classif_ord.index.tolist(),
         y=classif_ord.values,
         marker_color=[CORES_IAF.get(c, '#6b7280') for c in classif_ord.index],
-        text=classif_ord.values,
-        textposition='outside'
+        text=classif_ord.values, textposition='outside'
     ))
     fig2.update_layout(
         height=300, margin=dict(t=20, b=20),
