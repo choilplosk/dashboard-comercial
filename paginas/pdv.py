@@ -34,12 +34,12 @@ def _fmt_val(v, tipo='num', casas=2) -> str:
     return fmt_num(v, casas)
 
 def _fmt_ly(v) -> str:
-    if v is None or _is_nan(v) or v == '-': return 'n/e'
+    if v is None or _is_nan(v) or v == '-': return None
     try:
         pct = float(v) * 100
         sinal = '+' if pct >= 0 else ''
         return f"{sinal}{pct:.1f}%"
-    except: return 'n/e'
+    except: return None
 
 def _bg_fg(cor):
     return {
@@ -76,7 +76,7 @@ def _card_com_ly(label, real, meta, ly=None, iaf_peso=None, tipo='num', casas=2,
         meta_str = _fmt_val(meta, tipo, casas)
         at_str = f"{at*100:.1f}%" if at is not None else 'n/e'
 
-    ly_str = _fmt_ly(ly) if ly is not None else None
+    ly_str = _fmt_ly(ly)
     ly_cor = '#166534' if ly is not None and not _is_nan(ly) and float(ly) >= 0 else '#991b1b'
 
     bg, fg = _bg_fg(cor)
@@ -85,9 +85,10 @@ def _card_com_ly(label, real, meta, ly=None, iaf_peso=None, tipo='num', casas=2,
              ) if iaf_peso else ''
 
     ly_html = ''
-    if ly_str and ly_str != 'n/e':
-        ly_html = (f'<span style="font-size:11px;color:{ly_cor};font-weight:600;">'
-                   f'x LY: {ly_str}</span>')
+    if ly_str:
+        sinal = '▲' if ly is not None and not _is_nan(ly) and float(ly) >= 0 else '▼'
+        ly_html = (f'<div style="font-size:11px;color:{ly_cor};font-weight:600;margin-top:3px;">'
+                   f'{sinal} {ly_str} vs LY</div>')
 
     st.markdown(f"""
     <div style="background:{bg};border-radius:10px;padding:12px 14px;
@@ -99,7 +100,7 @@ def _card_com_ly(label, real, meta, ly=None, iaf_peso=None, tipo='num', casas=2,
         <div style="font-size:11px;color:{fg};opacity:0.85;">
             Meta: {meta_str} &nbsp;|&nbsp; x Meta: {at_str}
         </div>
-        <div style="margin-top:2px;">{ly_html}</div>
+        {ly_html}
     </div>
     """, unsafe_allow_html=True)
 
@@ -137,8 +138,6 @@ def _linha_tabela(row) -> dict:
 
     rf_real = get('resgate_fidelidade')
     rf_str = f"{rf_real:.1f}%" if rf_real is not None and not _is_nan(rf_real) else 'n/e'
-    rf_meta = get('meta_resgate_fidelidade')
-    rf_meta_str = f"{rf_meta*100:.1f}%" if rf_meta is not None and not _is_nan(rf_meta) else 's/ meta'
 
     return {
         'Consultor':       row.get('consultor', '—'),
@@ -232,10 +231,10 @@ def render(dados: dict):
         vals = vals[vals > 0]
         return vals.mean() if not vals.empty else None
 
-    # CORRIGIDO: usa carregar_nps_supabase() em vez de carregar_nps() local
     nps_dict = carregar_nps_supabase()
     nps_val  = nps_dict.get(str(pdv_int))
 
+    # ── Bloco 1: Indicadores Comerciais ──────────────────────────────────────
     st.markdown('<div class="card-secao">', unsafe_allow_html=True)
     st.markdown(f"#### PDV {pdv_sel} — Indicadores Comerciais")
 
@@ -262,13 +261,19 @@ def render(dados: dict):
                      tipo='brl')
 
     c5, c6, c7, c8 = st.columns(4)
-    with c5: _card("🧾 Qtd. Boletos",  get_pdv('qtd_boletos'),    None,                             None, 'num', 0)
+    with c5:
+        # Qtd. Boletos com vs LY — coluna G do arquivo PDV
+        _card_com_ly("🧾 Qtd. Boletos",
+                     get_pdv('qtd_boletos'), None,
+                     ly=get_pdv('qtd_boletos_vs_ly'),
+                     tipo='num', casas=0)
     with c6: _card("✂️ Serviços",      get_pdv('qtd_servicos'),   meta_soma('meta_servicos'),       pesos.get('servicos'), 'num', 0)
     with c7: _card("🏆 NPS",           nps_val,                   meta_media('meta_nps'),           pesos.get('nps'), 'num', 1)
     with c8: _card("🪪 ID Cliente",    get_base_media('pct_id_cliente_iaf'), meta_media('meta_pct_id_cliente'), pesos.get('id_cliente'), 'pct')
 
     st.markdown('</div>', unsafe_allow_html=True)
 
+    # ── Bloco 2: Penetrações ──────────────────────────────────────────────────
     st.markdown('<div class="card-secao">', unsafe_allow_html=True)
     st.markdown("#### Penetrações e Mix")
 
@@ -291,6 +296,7 @@ def render(dados: dict):
 
     st.markdown('</div>', unsafe_allow_html=True)
 
+    # ── Bloco 3: Tabela de Consultores ────────────────────────────────────────
     st.markdown('<div class="card-secao">', unsafe_allow_html=True)
     st.markdown(f"#### Consultores — PDV {pdv_sel}")
 
@@ -311,6 +317,7 @@ def render(dados: dict):
 
     st.markdown('</div>', unsafe_allow_html=True)
 
+    # ── Configurações ─────────────────────────────────────────────────────────
     with st.expander("⚙️ Configurações do PDV"):
         st.markdown("**Lançar NPS**")
         st.caption("O NPS representa o resultado da loja inteira — inserido manualmente.")
