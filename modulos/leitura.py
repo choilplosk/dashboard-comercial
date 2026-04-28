@@ -1,8 +1,6 @@
 """
 Módulo de leitura de arquivos.
 Identifica automaticamente cada arquivo pelo conteúdo interno.
-Não depende do nome do arquivo.
-Assinaturas validadas contra os arquivos reais do cliente.
 """
 
 import pandas as pd
@@ -11,10 +9,7 @@ import unicodedata
 import streamlit as st
 
 
-# ── Normalização ──────────────────────────────────────────────────────────────
-
 def _n(texto: str) -> str:
-    """Remove acentos, espaços extras e converte para minúsculo."""
     txt = re.sub(r'\s+', ' ', str(texto)).strip().lower()
     return ''.join(
         c for c in unicodedata.normalize('NFD', txt)
@@ -22,11 +17,8 @@ def _n(texto: str) -> str:
     )
 
 def _cols(df: pd.DataFrame) -> set:
-    """Retorna conjunto de colunas normalizadas."""
     return set(_n(c) for c in df.columns if c is not None)
 
-
-# ── Assinaturas ───────────────────────────────────────────────────────────────
 
 ASSINATURAS = {
     'pdv': {
@@ -60,8 +52,6 @@ def _identificar(df: pd.DataFrame) -> str | None:
     return None
 
 
-# ── Leitura de arquivo ────────────────────────────────────────────────────────
-
 def _ler(arquivo) -> pd.DataFrame | None:
     nome = arquivo.name.lower()
     try:
@@ -80,17 +70,13 @@ def _ler(arquivo) -> pd.DataFrame | None:
     return None
 
 
-# ── Processadores ─────────────────────────────────────────────────────────────
-
 def processar_consultor(df: pd.DataFrame) -> pd.DataFrame:
-    # Remove linhas de cabeçalho duplo e totais
     df = df[~df.iloc[:, 0].astype(str).str.strip().isin(
         ['Tipo de Receita', 'TOTAL', 'Consultor', '', 'nan']
     )].copy()
     df = df[df.iloc[:, 0].notna()].reset_index(drop=True)
 
     cols = list(df.columns)
-
     mapa = {}
     for i, c in enumerate(cols):
         cn = _n(c)
@@ -144,6 +130,7 @@ def processar_pdv(df: pd.DataFrame) -> pd.DataFrame:
         1:  'receita',
         3:  'receita_vs_ly',
         4:  'qtd_boletos',
+        6:  'qtd_boletos_vs_ly',      # col G — vs LY de Qtd. Boletos
         7:  'boleto_medio',
         9:  'boleto_medio_vs_ly',
         10: 'qtd_itens',
@@ -176,10 +163,6 @@ def processar_pdv(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def _limpar_valor_meta(v) -> float:
-    """
-    Converte valores de meta formatados para float.
-    Aceita: '28,0%', 'R$ 35.650,00', '7,00', 0.28, 35650.0 etc.
-    """
     if v is None:
         return float('nan')
     if isinstance(v, (int, float)):
@@ -187,10 +170,7 @@ def _limpar_valor_meta(v) -> float:
     s = str(v).strip()
     if s.upper() in ('', 'NAN', 'NONE', '-', 'GERENTE'):
         return float('nan')
-    # Remove R$, espaços, pontos de milhar, converte vírgula decimal, remove %
     s = s.replace('R$', '').replace(' ', '')
-    # Trata separador de milhar (ponto) e decimal (vírgula) — padrão BR
-    # Ex: '35.650,00' → '35650.00'
     if ',' in s and '.' in s:
         s = s.replace('.', '').replace(',', '.')
     elif ',' in s:
@@ -206,7 +186,6 @@ def processar_metas(df: pd.DataFrame) -> pd.DataFrame:
     df = df[df.iloc[:, 0].notna()].copy()
     df.columns = [str(c).strip() for c in df.columns]
 
-    # Aceita tanto nomes do upload manual quanto nomes do Supabase exportado
     renomear = {
         'Consultor': 'consultor',
         'PDV': 'pdv',
@@ -242,7 +221,6 @@ def processar_metas(df: pd.DataFrame) -> pd.DataFrame:
     df = df.rename(columns={k: v for k, v in renomear.items() if k in df.columns})
     df['is_gerente'] = df.get('meta_receita', pd.Series(dtype=str)).astype(str).str.upper().str.strip() == 'GERENTE'
 
-    # Usa _limpar_valor_meta para aceitar valores formatados (R$, %, vírgulas)
     for c in [col for col in df.columns if col.startswith('meta_')]:
         df[c] = df[c].apply(_limpar_valor_meta)
 
@@ -292,18 +270,13 @@ def processar_treinamentos(df: pd.DataFrame) -> pd.DataFrame:
 def processar_id_cliente(df: pd.DataFrame) -> pd.DataFrame:
     df.columns = [str(c).strip() for c in df.columns]
     cols = list(df.columns)
-
-    # Mapeamento por nome para PDV e CONSULTOR
     renomear = {
         'PDV': 'pdv',
         'CONSULTOR': 'consultor',
     }
     df = df.rename(columns={k: v for k, v in renomear.items() if k in df.columns})
-
-    # Coluna E (índice 4) = % Atendimentos com CPF (IAF 2026) — indicador oficial
     if len(cols) > 4:
         df = df.rename(columns={cols[4]: 'pct_id_cliente_iaf'})
-
     df['pdv'] = pd.to_numeric(df['pdv'], errors='coerce').astype('Int64')
     df['consultor'] = df['consultor'].astype(str).str.strip().str.title()
     if 'pct_id_cliente_iaf' in df.columns:
@@ -320,10 +293,7 @@ PROCESSADORES = {
 }
 
 
-# ── Widget de upload ──────────────────────────────────────────────────────────
-
 def widget_upload_sidebar() -> dict:
-    """Upload na sidebar. Identifica cada arquivo pelo conteúdo."""
     st.sidebar.subheader("📁 Carregar arquivos")
     st.sidebar.caption("O sistema identifica cada arquivo automaticamente.")
 
